@@ -136,7 +136,6 @@ __kontext_magic() {
 
 __is_sourced && export __SOURCED=1 || export __SOURCED=0
 
-alias k=kontext
 kontext() {
   while getopts "c:hD" arg; do
     case "${arg}" in
