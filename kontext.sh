@@ -187,6 +187,7 @@ kontext-cd() {
 kontext-list() {
   ls -1 "${KONTEXT_HOME}"
 }
+alias kontext-ls=kontext-list
 
 kontext-version() {
   __echo 'kontext '$KONTEXT_VERSION' (c) 2024 Konrad Lother'
@@ -205,6 +206,8 @@ kontext-create() {
 }
 
 kontext-load() {
+  [ -z $1 ] && return 1
+
   kontext-unload
 
   if [ -d "${KONTEXT_HOME}/${1}" ]; then
