@@ -178,9 +178,11 @@ kontext_loaded() {
   fi
 }
 
+
 kontext-cd() {
   kontext_loaded || return 1
 
+  echo "${KONTEXT_PATH}"
   cd "${KONTEXT_PATH}"
 }
 
@@ -217,6 +219,11 @@ kontext-load() {
     return 0
   fi
   __echo "kontext '${1}' does not exist." >> /dev/stderr
+
+  if [ -r "${KONTEXT_HOME}/.env" ]; then
+    source "${KONTEXT_HOME}/.env"
+  fi
+
   return 1
 }
 
