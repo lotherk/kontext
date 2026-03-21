@@ -2,7 +2,11 @@
 
 ## Installation
 
-Download [kontext.sh](kontext.sh) and source it.
+Download [kontext.sh](kontext.sh) and source it in your shell startup file (e.g., `.bashrc`, `.zshrc`).
+
+```bash
+source /path/to/kontext.sh
+```
 
 ## help
 ```
@@ -19,6 +23,7 @@ available subcommands
     create
     list
     load
+    status
     unload
     version
 
@@ -27,35 +32,50 @@ See kontext <subcommand> -h for additional informations
 Usage: kontext [options] [subcommand] [subcommand_options] args...
 ```
 
+## Configuration
+
+Create `~/.kontext/config.sh` to set global options. For example:
+```bash
+KONTEXT_AUTOLOAD=1  # Auto-load contexts on create
+```
+
 ## Magic
 
-`kontext` knows magic. for example it can set `KUBECONFIG` if it finds a `kubeconfig.yaml` file in `$KONTEXT_PATH`.
+Kontext automatically configures your environment when loading a context. It sources these files if they exist in `$KONTEXT_PATH`:
+- `env.sh`: General environment variables
+- `path.sh`: PATH modifications
+- `kubeconfig.yaml`: Sets `KUBECONFIG`
+
+If [direnv](https://direnv.net/) is installed, it will allow `.envrc` files for automatic environment loading.
+
+It also updates your shell prompt to show the active context.
 
 ## Plugins
 
-you can extend `kontext`s functionallity with plugins. a plugin is a shell function or executable found in `$PATH` that follows the naming convention `kontext-YOURPLUGIN`.
+You can extend kontext's functionality with plugins. Plugins are executable scripts placed in `~/.kontext/plugins/`. The script name becomes the subcommand.
 
-for example:
+For example, create `~/.kontext/plugins/myplug` with:
+```bash
+#!/bin/sh
+echo 'this is my plugin' "$@"
 ```
-kontext-myplug() {
-    echo 'this is my plugin' $@
-}
-```
 
-becomes
-
+Then run:
 ```
 $ kontext myplug 1 2 3
 this is my plugin 1 2 3
 ```
 
-### Built-in plugins
+Plugins can also be shell functions defined in your shell startup, following the naming convention `kontext-YOURPLUGIN`.
+
+### Built-in subcommands
 
 | name | description |
 | ---- | ----------- |
 | cd | change directory to `$KONTEXT_PATH`
-| list | print a list of kontexts
-| create | create a kontext
-| load | load a kontext, only useful if `kontext.sh` is sourced
-| unload | unload a kontext, only useful if `kontext.sh` is sourced
+| create | create a new kontext directory
+| list | print a list of available kontexts
+| load | load a kontext (sets environment and path)
+| status | show current kontext status
+| unload | unload the current kontext
 | version | print kontext.sh version

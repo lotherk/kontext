@@ -27,13 +27,18 @@
 
 KONTEXT_VERSION='0.1.0'
 
-if [ -z $KONTEXT_HOME ]; then
-  export KONTEXT_HOME="${HOME}/.kontext"
+if [ -z "$KONTEXT_HOME" ]; then
+  KONTEXT_HOME="${HOME}/.kontext"
+  export KONTEXT_HOME
 fi
 
-if [ -z $KONTEXT_CONFIG ] && [ -r "${KONTEXT_HOME}/.config" ]; then
-  export KONTEXT_CONFIG="${KONTEXT_HOME}/.config"
+if [ -z "$KONTEXT_CONFIG" ] && [ -r "${KONTEXT_HOME}/config.sh" ]; then
+  KONTEXT_CONFIG="${KONTEXT_HOME}/config.sh"
+  export KONTEXT_CONFIG
 fi
+
+# Built-in subcommands (hardcoded for POSIX compatibility)
+__KONTEXT_BUILTINS="cd create list load status unload version"
 
 # Helper function, thanks to
 # https://stackoverflow.com/questions/2683279/how-to-detect-if-a-script-is-being-sourced
@@ -102,17 +107,16 @@ __kontext_prompt() {
 }
 
 __kontext_list_subcommands() {
-  local subcommands=""
+  subcommands="$__KONTEXT_BUILTINS"
 
-  # check all functions
-  for f in $(declare -f |grep -Eo '^kontext-\w+' | sed 's/kontext-//'); do
-    subcommands="${subcommands} $f"
-  done
-
-  # check all aliases
-  for f in $(alias |grep -Eo '^kontext-\w+' | sed 's/kontext-//'); do
-    subcommands="${subcommands} $f"
-  done
+  # Check for plugin executables in plugins directory
+  if [ -d "${KONTEXT_HOME}/plugins" ]; then
+    for f in "${KONTEXT_HOME}/plugins"/*; do
+      if [ -x "$f" ] && [ -f "$f" ]; then
+        subcommands="${subcommands} $(basename "$f")"
+      fi
+    done
+  fi
 
   echo $subcommands
 }
@@ -121,16 +125,29 @@ __kontext_list_subcommands() {
 __kontext_magic() {
   if [ -f "${KONTEXT_PATH}/env.sh" ]; then
     __debug "Loading env.sh"
-    source "${KONTEXT_PATH}/env.sh"
+    . "${KONTEXT_PATH}/env.sh"
   fi
 
-  if [ -f "$KONTEXT_PATH/kubeconfig.yaml" ]; then
+  if [ -f "${KONTEXT_PATH}/path.sh" ]; then
+    __debug "Loading path.sh"
+    . "${KONTEXT_PATH}/path.sh"
+  fi
+
+  if [ -f "${KONTEXT_PATH}/kubeconfig.yaml" ]; then
     __debug "Loading kubeconfig.yaml"
-    export KUBECONFIG="${KONTEXT_PATH}/kubeconfig.yaml"
+    KUBECONFIG="${KONTEXT_PATH}/kubeconfig.yaml"
+    export KUBECONFIG
   fi
 
-  export KONTEXT_PRESERVE_PS1="${PS1}"
-  export PS1="[$KONTEXT] $PS1"
+  if command -v direnv >/dev/null 2>&1 && [ -f "${KONTEXT_PATH}/.envrc" ]; then
+    __debug "Allowing .envrc for direnv"
+    direnv allow "${KONTEXT_PATH}/.envrc"
+  fi
+
+  KONTEXT_PRESERVE_PS1="$PS1"
+  export KONTEXT_PRESERVE_PS1
+  PS1="[$KONTEXT] $PS1"
+  export PS1
 }
 
 
@@ -157,15 +174,17 @@ kontext() {
     return 0
   fi
 
-  local cmd=$1
+  cmd=$1
   shift
 
-  # check if $1 exists as kontext-$1 function
-  type "kontext-${cmd}" 2>&1 > /dev/null
-  if [ $? -eq 0 ]; then
-    "kontext-${cmd}" $@
+  # Check if $cmd is a built-in function
+  if type "kontext-${cmd}" 2>/dev/null; then
+    "kontext-${cmd}" "$@"
+  # Check if $cmd is a plugin executable
+  elif [ -x "${KONTEXT_HOME}/plugins/${cmd}" ]; then
+    "${KONTEXT_HOME}/plugins/${cmd}" "$@"
   else
-    echo "${0}: unknown subcommand '${cmd}', try ${0} -h for help" > /dev/stderr
+    echo "${0}: unknown subcommand '${cmd}', try ${0} -h for help" >/dev/stderr
     return 1
   fi
 
@@ -195,8 +214,23 @@ kontext-version() {
   __echo 'kontext '$KONTEXT_VERSION' (c) 2024 Konrad Lother'
 }
 
+kontext-status() {
+  if kontext_loaded; then
+    __echo "Active kontext: $KONTEXT"
+    __echo "Path: $KONTEXT_PATH"
+    if [ -f "${KONTEXT_PATH}/env.sh" ]; then
+      __echo "Env file loaded: ${KONTEXT_PATH}/env.sh"
+    fi
+    if [ -f "${KONTEXT_PATH}/kubeconfig.yaml" ]; then
+      __echo "KUBECONFIG set: ${KONTEXT_PATH}/kubeconfig.yaml"
+    fi
+  else
+    __echo "No active kontext"
+  fi
+}
+
 kontext-create() {
-  local dest="${KONTEXT_HOME}/${1}"
+  dest="${KONTEXT_HOME}/${1}"
   if [ ! -e "${dest}" ]; then
     mkdir -p "${dest}"
   fi
@@ -230,7 +264,7 @@ kontext-load() {
 kontext-unload() {
   kontext_loaded || return 0
 
-  local kontext="${KONTEXT}"
+  kontext="${KONTEXT}"
 
   export PS1="${KONTEXT_PRESERVE_PS1}"
 
@@ -239,10 +273,8 @@ kontext-unload() {
   __echo "kontext '${kontext}' unloaded."
 }
 
-if [ ! -z "$KONTEXT_CONFIG" ]; then
-  if [ -f "$KONTEXT_CONFIG" ]; then
-    source "$KONTEXT_CONFIG"
-  fi
+if [ -n "$KONTEXT_CONFIG" ] && [ -f "$KONTEXT_CONFIG" ]; then
+  . "$KONTEXT_CONFIG"
 fi
 
 if [ $__SOURCED -eq 0 ]; then
